@@ -1,10 +1,16 @@
 #!/bin/bash
 
+# WireGuard Port Forwarding Script
+
+# Default variables
+PROTOCOL="tcp"  # Default protocol
+
 # Function to display usage
 usage() {
     echo "Usage: $0 [-i IP_ADDRESS] [-p PORT] [-r PORT] [-f] [-x] [-u] [-d] [-s] [-c]"
     echo "Note: -i must be specified before -p, -r, -f, or -c."
     echo "  -i IP_ADDRESS   Set the IP address for port forwarding."
+    echo "  -l PROTOCOL     Set the protocol for port forwarding (tcp/udp). Default is tcp."
     echo "  -p PORT         Initialize port forwarding for the specified port and IP address."
     echo "  -r PORT         Remove port forwarding for the specified port and IP address."
     echo "  -f              Enable forwarding of traffic out to the internet for the specified IP address."
@@ -23,11 +29,19 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 IP_ADDRESS=""
-while getopts "i:p:r:fxudsc" opt; do
+while getopts "i:l:p:r:fxudsc" opt; do
     case $opt in
         i)
             IP_ADDRESS=$OPTARG
+            
             ;;
+        l)
+            PROTOCOL=$OPTARG
+            if [[ "$PROTOCOL" != "tcp" && "$PROTOCOL" != "udp" ]]; then
+                echo "Error: Invalid protocol specified. Use 'tcp' or 'udp'."
+                exit 1
+            fi  
+            ;; 
         p)
             if [[ -z $IP_ADDRESS ]]; then
                 echo "Error: IP address must be set before initializing port forwarding."
@@ -41,14 +55,14 @@ while getopts "i:p:r:fxudsc" opt; do
             echo "Initializing port forwarding for port $PORT to IP $IP_ADDRESS..."
             
             # Set prerouting, postrouting, and forwarding rules and check for duplicates
-            iptables -t nat -C PREROUTING -p tcp -i eth0 --dport $PORT -j DNAT --to-destination $IP_ADDRESS:$PORT 2>/dev/null || \
-            iptables -t nat -A PREROUTING -p tcp -i eth0 --dport $PORT -j DNAT --to-destination $IP_ADDRESS:$PORT
+            iptables -t nat -C PREROUTING -p $PROTOCOL -i eth0 --dport $PORT -j DNAT --to-destination $IP_ADDRESS:$PORT 2>/dev/null || \
+            iptables -t nat -A PREROUTING -p $PROTOCOL -i eth0 --dport $PORT -j DNAT --to-destination $IP_ADDRESS:$PORT
             
-            iptables -t nat -C POSTROUTING -p tcp -o wg0 -d $IP_ADDRESS --dport $PORT -j MASQUERADE 2>/dev/null || \
-            iptables -t nat -A POSTROUTING -p tcp -o wg0 -d $IP_ADDRESS --dport $PORT -j MASQUERADE
+            iptables -t nat -C POSTROUTING -p $PROTOCOL -o wg0 -d $IP_ADDRESS --dport $PORT -j MASQUERADE 2>/dev/null || \
+            iptables -t nat -A POSTROUTING -p $PROTOCOL -o wg0 -d $IP_ADDRESS --dport $PORT -j MASQUERADE
 
-            iptables -C FORWARD -i eth0 -o wg0 -p tcp -d $IP_ADDRESS --dport $PORT -j ACCEPT 2>/dev/null || \
-            iptables -A FORWARD -i eth0 -o wg0 -p tcp -d $IP_ADDRESS --dport $PORT -j ACCEPT
+            iptables -C FORWARD -i eth0 -o wg0 -p $PROTOCOL -d $IP_ADDRESS --dport $PORT -j ACCEPT 2>/dev/null || \
+            iptables -A FORWARD -i eth0 -o wg0 -p $PROTOCOL -d $IP_ADDRESS --dport $PORT -j ACCEPT
             echo "Port forwarding initialized."
             ;;
         r)
@@ -57,9 +71,9 @@ while getopts "i:p:r:fxudsc" opt; do
                 echo "Error: Port 2222 is not allowed."
                 exit 1
             fi
-            iptables -t nat -D PREROUTING -p tcp -i eth0 --dport $PORT -j DNAT --to-destination $IP_ADDRESS:$PORT
-            iptables -t nat -D POSTROUTING -p tcp -o wg0 -d $IP_ADDRESS --dport $PORT -j MASQUERADE
-            iptables -D FORWARD -i eth0 -o wg0 -p tcp -d $IP_ADDRESS --dport $PORT -j ACCEPT
+            iptables -t nat -D PREROUTING -p $PROTOCOL -i eth0 --dport $PORT -j DNAT --to-destination $IP_ADDRESS:$PORT
+            iptables -t nat -D POSTROUTING -p $PROTOCOL -o wg0 -d $IP_ADDRESS --dport $PORT -j MASQUERADE
+            iptables -D FORWARD -i eth0 -o wg0 -p $PROTOCOL -d $IP_ADDRESS --dport $PORT -j ACCEPT
             echo "Port forwarding removed."
             ;;
         x)
