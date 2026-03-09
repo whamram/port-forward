@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# WireGuard Port Forwarding Script
+# iptables Port Forwarding Script
 
 # Default variables
 PROTOCOL="tcp"  # Default protocol
@@ -19,9 +19,7 @@ usage() {
     echo "  -r PORT         Remove port forwarding for the specified port and IP address."
     echo "  -f              Enable forwarding of traffic out to the internet for the specified IP address."
     echo "  -x              Reset all port forwarding rules to default."
-    echo "  -u              Start WireGuard."
-    echo "  -d              Stop WireGuard."
-    echo "  -s              Show current port forwarding rules and wireguard status."
+    echo "  -s              Show current port forwarding rules"
     echo "  -c              Remove port forwarding from the specified IP address to the internet."
     exit 1
 }
@@ -104,11 +102,6 @@ while getopts "n:e:i:l:p:r:fxudsc" opt; do
             iptables -F FORWARD
             echo "All port forwarding rules reset."
             ;;
-        u)
-            echo "Starting WireGuard..."
-            wg-quick up /etc/wireguard/wg0.conf
-            echo "WireGuard Up."
-          ;;
         f)
             if [[ -z $VPN_IFACE ]]; then
                 echo "Error: VPN interface (-n) must be set before initializing forwarding."
@@ -126,13 +119,7 @@ while getopts "n:e:i:l:p:r:fxudsc" opt; do
             iptables -A FORWARD -i $VPN_IFACE -s $IP_ADDRESS -o $EXT_IFACE -j ACCEPT
             echo "Port forwarding initialized."
             ;;
-        d)
-            echo "Stopping WireGuard..."
-            wg-quick down /etc/wireguard/wg0.conf
-            echo "WireGuard down."
-            ;;
         s)
-            wg show
             iptables -t nat -L -n -v
             ;;
         c)
